@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>عصام الكهربائي | 3D Viewer</title>
+    <style>
+        /* --- الأساسيات --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; overflow: hidden; background-color: #121212; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; }
+
+        /* --- شاشة البداية (UI) --- */
+        #landing-page {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d); /* خلفية عصرية */
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000; padding: 20px;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* الكارت الرئيسي */
+        .main-card {
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            width: 100%; max-width: 450px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-height: 90vh; /* عشان لو الشاشة قصيرة */
+            overflow-y: auto; /* يسمح بالتمرير داخل الكارت فقط */
+        }
+
+        /* الهيدر */
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { margin: 0; font-size: 2rem; color: #ffeb3b; text-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        .header p { margin: 5px 0 0; color: #ccc; font-size: 0.9rem; }
+
+        /* التبويبات (Tabs) */
+        .tabs { display: flex; background: rgba(255,255,255,0.1); border-radius: 50px; padding: 5px; margin-bottom: 20px; }
+        .tab-btn {
+            flex: 1; padding: 10px; border: none; background: transparent; color: #aaa;
+            border-radius: 40px; font-weight: bold; cursor: pointer; transition: 0.3s;
+        }
+        .tab-btn.active { background: #ff9800; color: white; shadow: 0 2px 10px rgba(255, 152, 0, 0.4); }
+
+        /* المحتوى */
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* حقول الإدخال */
+        .input-group { margin-bottom: 15px; text-align: right; }
+        label { display: block; margin-bottom: 8px; font-size: 0.9rem; color: #ddd; }
+        input[type="number"], input[type="file"] {
+            width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444;
+            background: #222; color: white; font-size: 1rem;
+        }
+        input[type="file"] { padding: 8px; background: #333; }
+
+        /* الأزرار الرئيسية */
+        .action-btn {
+            width: 100%; padding: 15px; border: none; border-radius: 12px;
+            font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-top: 10px;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .btn-start { background: linear-gradient(to right, #56ab2f, #a8e063); color: #004d00; }
+        .btn-demo { background: linear-gradient(to right, #2193b0, #6dd5ed); color: #002f4b; }
+        
+        /* أزرار التحكم داخل العرض */
+        #ui-controls {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            display: none; gap: 15px; z-index: 999; width: 90%; justify-content: center;
+        }
+        .control-btn {
+            background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #555;
+            padding: 12px 20px; border-radius: 30px; cursor: pointer; font-size: 1rem;
+            flex: 1; max-width: 150px; text-align: center; backdrop-filter: blur(5px);
+        }
+
+        /* رسالة التحميل */
+        #loader { 
+            display: none; text-align: center; margin-top: 15px; color: #ffeb3b; font-weight: bold; 
+            padding: 10px; background: rgba(0,0,0,0.5); border-radius: 10px;
+        }
+
+    </style>
+    
+    <script src="https://unpkg.com/dxf-parser@1.1.2/dist/dxf-parser.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="landing-page">
+        <div class="main-card">
+            <div class="header">
+                <h1>⚡ عصام الكهربائي ⚡</h1>
+                <p>استعراض المخططات الهندسية بالواقع الافتراضي</p>
+            </div>
+
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('upload')">📂 رفع مخطط</button>
+                <button class="tab-btn" onclick="switchTab('gallery')">🏛️ المعرض</button>
+            </div>
+
+            <div id="tab-upload" class="tab-content active">
+                <div class="input-group">
+                    <label>📄 اختر ملف الـ DXF</label>
+                    <input type="file" id="fileInput" accept=".dxf">
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <div class="input-group" style="flex:1">
+                        <label>الارتفاع (م)</label>
+                        <input type="number" id="wallHeight" value="3.0" step="0.1">
+                    </div>
+                    <div class="input-group" style="flex:1">
+                        <label>السمك (سم)</label>
+                        <input type="number" id="wallThick" value="20">
+                    </div>
+                </div>
+                <button class="action-btn btn-start" onclick="handleFileUpload()">
+                    <span>ابدأ العرض</span> 🚀
+                </button>
+            </div>
+
+            <div id="tab-gallery" class="tab-content">
+                <p style="color:#ddd; line-height:1.6; text-align:center;">
+                    جولة افتراضية سابقة التجهيز في مشروع:<br>
+                    <strong style="color:#00d2ff; font-size:1.2rem;">✨ عناقيد التحلية ✨</strong>
+                </p>
+                <button class="action-btn btn-demo" onclick="loadDemo()">
+                    <span>دخول المعرض</span> 🏛️
+                </button>
+            </div>
+
+            <div id="loader">جاري المعالجة... يرجى الانتظار</div>
+        </div>
+    </div>
+
+    <div id="ui-controls">
+        <button class="control-btn" onclick="toggleViewMode()">🏃 مشي / ✈️ طيران</button>
+        <button class="control-btn" onclick="location.reload()">🔄 خروج</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
+        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+
+        // --- منطق الواجهة ---
+        window.switchTab = (tabName) => {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById('tab-' + tabName).classList.add('active');
+            // تحديد الزر النشط (بسيط)
+            const btnIndex = tabName === 'upload' ? 0 : 1;
+            document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
+        };
+
+        window.toggleViewMode = toggleViewMode; // تصدير الدالة للـ HTML
+
+        // --- إعدادات Three.js ---
+        let camera, scene, renderer, controls;
+        let roomGroup;
+        let settings = { height: 3.0, thickness: 0.20 };
+
+        window.handleFileUpload = () => {
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput.files.length === 0) { alert("يرجى اختيار ملف DXF"); return; }
+            
+            settings.height = parseFloat(document.getElementById('wallHeight').value);
+            settings.thickness = parseFloat(document.getElementById('wallThick').value) / 100;
+
+            document.getElementById('loader').style.display = 'block';
+            
+            const reader = new FileReader();
+            reader.onload = (e) => init3DScene(e.target.result);
+            reader.readAsText(fileInput.files[0]);
+        };
+
+        window.loadDemo = () => {
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('loader').innerText = "تحميل عناقيد التحلية...";
+            settings.height = 5.8; 
+            
+            fetch('room.dxf')
+                .then(res => res.ok ? res.text() : Promise.reject("ملف room.dxf غير موجود"))
+                .then(text => init3DScene(text))
+                .catch(err => alert(err));
+        };
+
+        function init3DScene(dxfText) {
+            // إخفاء الواجهة
+            document.getElementById('landing-page').style.display = 'none';
+            document.getElementById('ui-controls').style.display = 'flex';
+
+            // إعداد المشهد
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x222222);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 1000);
+            camera.position.set(0, 15, 15);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            document.body.appendChild(renderer.domElement);
+            document.body.appendChild(VRButton.createButton(renderer));
+
+            // إضاءة
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(10, 20, 10);
+            scene.add(dirLight);
+            scene.add(new THREE.GridHelper(100, 100, 0x444444, 0x222222));
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            // إعداد الـ VR Controllers
+            setupControllers();
+
+            // معالجة الملف
+            try {
+                const parser = new window.DxfParser();
+                const dxf = parser.parseSync(dxfText);
+                buildWalls(dxf);
+            } catch(err) { alert("خطأ في الملف: " + err); }
+
+            window.addEventListener('resize', onResize);
+            renderer.setAnimationLoop(render);
+        }
+
+        function buildWalls(dxf) {
+            roomGroup = new THREE.Group();
+            const points = [];
+            
+            // تجميع النقاط والمركز
+            dxf.entities.forEach(e => {
+                if(e.type === 'LINE' || e.type === 'LWPOLYLINE') {
+                    if(e.vertices) e.vertices.forEach(v => points.push(v));
+                }
+            });
+
+            if(points.length === 0) return;
+
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            points.forEach(p => {
+                if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x;
+                if(p.y < minY) minY = p.y; if(p.y > maxY) maxY = p.y;
+            });
+            const cx = (minX + maxX) / 2;
+            const cy = (minY + maxY) / 2;
+
+            const mat = new THREE.MeshStandardMaterial({ color: 0xdddddd, side: THREE.DoubleSide });
+
+            dxf.entities.forEach(e => {
+                if (e.type === 'LINE') createWall(e.vertices[0], e.vertices[1], cx, cy, mat);
+                else if (e.type === 'LWPOLYLINE') {
+                    for(let i=0; i<e.vertices.length-1; i++) createWall(e.vertices[i], e.vertices[i+1], cx, cy, mat);
+                    if(e.shape) createWall(e.vertices[e.vertices.length-1], e.vertices[0], cx, cy, mat);
+                }
+            });
+            scene.add(roomGroup);
+        }
+
+        function createWall(p1, p2, cx, cy, mat) {
+            const v1 = new THREE.Vector3(p1.x - cx, settings.height/2, -(p1.y - cy));
+            const v2 = new THREE.Vector3(p2.x - cx, settings.height/2, -(p2.y - cy));
+            const dist = v1.distanceTo(v2);
+            if(dist < 0.05) return;
+
+            const geo = new THREE.BoxGeometry(settings.thickness, settings.height, dist);
+            const wall = new THREE.Mesh(geo, mat);
+            wall.position.copy(v1.clone().add(v2).multiplyScalar(0.5));
+            wall.lookAt(v2);
+            wall.frustumCulled = false;
+            roomGroup.add(wall);
+        }
+
+        function toggleViewMode() {
+            if (camera.position.y > 4) {
+                camera.position.set(0, 1.7, 0); // وضع المشي
+            } else {
+                camera.position.set(0, 15, 15); // وضع الطيران
+                controls.target.set(0,0,0);
+            }
+        }
+
+        function setupControllers() {
+            // إضافة الكنترولر البسيط (الشعاع)
+            const controller1 = renderer.xr.getController(0);
+            const controller2 = renderer.xr.getController(1);
+            
+            // شعاع ليزر
+            const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-5)]);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff }); // أبيض
+            const line = new THREE.Line(lineGeo, lineMat);
+            
+            controller1.add(line.clone());
+            controller2.add(line.clone());
+
+            // إضافة موديلات اليد (اختياري لتحسين الشكل)
+            const controllerModelFactory = new XRControllerModelFactory();
+            const grip1 = renderer.xr.getControllerGrip(0);
+            grip1.add(controllerModelFactory.createControllerModel(grip1));
+            const grip2 = renderer.xr.getControllerGrip(1);
+            grip2.add(controllerModelFactory.createControllerModel(grip2));
+            
+            scene.add(controller1, controller2, grip1, grip2);
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function render() {
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
