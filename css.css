@@ -1,0 +1,98 @@
+/* --- الأساسيات --- */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+body { margin: 0; overflow: hidden; background-color: #121212; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; }
+
+/* --- شاشة البداية (UI) --- */
+#landing-page {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+    background-size: 400% 400%; animation: gradientBG 15s ease infinite;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; padding: 20px;
+}
+
+@keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+.main-card {
+    background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px;
+    width: 100%; max-width: 500px; padding: 25px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 90vh; overflow-y: auto;
+}
+
+.header { text-align: center; margin-bottom: 20px; }
+.header h1 { margin: 0; font-size: 2rem; color: #ffeb3b; text-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+.header p { margin: 5px 0 0; color: #ccc; font-size: 0.9rem; }
+
+.tabs { display: flex; background: rgba(255,255,255,0.1); border-radius: 50px; padding: 5px; margin-bottom: 20px; }
+.tab-btn { flex: 1; padding: 10px; border: none; background: transparent; color: #aaa; border-radius: 40px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+.tab-btn.active { background: #ff9800; color: white; }
+
+.tab-content { display: none; animation: fadeIn 0.3s ease; }
+.tab-content.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.input-group { margin-bottom: 15px; text-align: right; }
+label { display: block; margin-bottom: 8px; font-size: 0.9rem; color: #ddd; }
+input[type="number"], input[type="file"] { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; font-size: 1rem; }
+input[type="file"] { padding: 8px; background: #333; }
+
+.action-btn { width: 100%; padding: 15px; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.btn-start { background: linear-gradient(to right, #56ab2f, #a8e063); color: #004d00; }
+.btn-demo { background: linear-gradient(to right, #2193b0, #6dd5ed); color: #002f4b; }
+
+#ui-controls {
+    position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+    display: none; gap: 15px; z-index: 999; width: 90%; justify-content: center; pointer-events: none;
+}
+.control-btn {
+    background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #555;
+    padding: 12px 20px; border-radius: 30px; cursor: pointer; font-size: 1rem;
+    flex: 1; max-width: 150px; text-align: center; backdrop-filter: blur(5px);
+    pointer-events: auto;
+}
+
+#loader { display: none; text-align: center; margin-top: 15px; color: #ffeb3b; font-weight: bold; padding: 10px; background: rgba(0,0,0,0.5); border-radius: 10px; }
+
+/* --- تصميم نافذة الطبقات (Layers Modal) --- */
+#layer-modal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.9); z-index: 2000;
+    display: none; align-items: center; justify-content: center;
+}
+.layer-card {
+    background: #1e1e1e; padding: 20px; border-radius: 15px;
+    width: 95%; max-width: 500px; max-height: 80vh; display: flex; flex-direction: column;
+    border: 2px solid #ff9800;
+}
+.layer-list {
+    flex: 1; overflow-y: auto; margin: 15px 0; padding-right: 5px;
+}
+.layer-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px; border-bottom: 1px solid #333; background: #252525; margin-bottom: 5px; border-radius: 8px;
+}
+.layer-name { font-weight: bold; color: #ddd; font-size: 0.9rem; }
+.layer-select {
+    padding: 8px; border-radius: 5px; border: none; color: white; font-weight: bold; outline: none;
+}
+/* ألوان الخيارات */
+.opt-wall { background-color: #e91e63; }   /* حوائط - أحمر */
+.opt-floor { background-color: #4caf50; }  /* أرضية - أخضر */
+.opt-ceil { background-color: #03a9f4; }   /* سقف - سماوي */
+.opt-hide { background-color: #555; }      /* إخفاء - رمادي */
+
+/* Mobile Crosshair Overlay */
+#mobile-crosshair {
+    position: absolute; width: 60px; height: 60px;
+    border: 2px solid rgba(255, 255, 0, 0.8); border-radius: 50%;
+    pointer-events: none; display: none; z-index: 2000;
+    transform: translate(-50%, -50%);
+    align-items: center; justify-content: center;
+}
+#mobile-crosshair::after { content: '+'; font-size: 30px; color: yellow; }
+
+#VRButton {
+    right: 20px !important; left: auto !important; width: auto !important;
+    border-radius: 30px !important; opacity: 0.9 !important; font-weight: bold;
+}
