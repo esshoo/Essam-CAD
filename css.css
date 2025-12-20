@@ -10,13 +10,12 @@ body { margin: 0; overflow: hidden; background-color: #121212; font-family: 'Seg
     display: flex; align-items: center; justify-content: center;
     z-index: 1000; padding: 20px;
 }
-
 @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 
 .main-card {
     background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(15px);
     border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px;
-    width: 100%; max-width: 500px; padding: 25px;
+    width: 100%; max-width: 600px; padding: 25px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 90vh; overflow-y: auto;
 }
 
@@ -54,35 +53,68 @@ input[type="file"] { padding: 8px; background: #333; }
 
 #loader { display: none; text-align: center; margin-top: 15px; color: #ffeb3b; font-weight: bold; padding: 10px; background: rgba(0,0,0,0.5); border-radius: 10px; }
 
-/* --- تصميم نافذة الطبقات (Layers Modal) --- */
+/* --- نافذة الطبقات (Layer Modal) --- */
 #layer-modal {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.9); z-index: 2000;
+    background: rgba(0,0,0,0.95); z-index: 2000;
     display: none; align-items: center; justify-content: center;
 }
 .layer-card {
     background: #1e1e1e; padding: 20px; border-radius: 15px;
-    width: 95%; max-width: 500px; max-height: 80vh; display: flex; flex-direction: column;
-    border: 2px solid #ff9800;
+    width: 95%; max-width: 650px;
+    max-height: 90vh; display: flex; flex-direction: column;
+    border: 2px solid #ff9800; box-shadow: 0 0 20px rgba(255, 152, 0, 0.2);
 }
 .layer-list {
     flex: 1; overflow-y: auto; margin: 15px 0; padding-right: 5px;
 }
 .layer-item {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 10px; border-bottom: 1px solid #333; background: #252525; margin-bottom: 5px; border-radius: 8px;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    padding: 15px; border-bottom: 1px solid #333; background: #252525; 
+    margin-bottom: 10px; border-radius: 8px; gap: 10px;
 }
-.layer-name { font-weight: bold; color: #ddd; font-size: 0.9rem; }
-.layer-select {
-    padding: 8px; border-radius: 5px; border: none; color: white; font-weight: bold; outline: none;
+.layer-name { 
+    font-weight: bold; color: #fff; font-size: 1rem; width: 100%; margin-bottom: 8px;
+    border-bottom: 1px solid #444; padding-bottom: 5px;
 }
-/* ألوان الخيارات */
-.opt-wall { background-color: #e91e63; }   /* حوائط - أحمر */
-.opt-floor { background-color: #4caf50; }  /* أرضية - أخضر */
-.opt-ceil { background-color: #03a9f4; }   /* سقف - سماوي */
-.opt-hide { background-color: #555; }      /* إخفاء - رمادي */
 
-/* Mobile Crosshair Overlay */
+/* أدوات التحكم في الطبقة */
+.layer-controls {
+    display: flex; gap: 10px; align-items: center; width: 100%; flex-wrap: wrap;
+}
+.layer-select {
+    flex: 2; min-width: 120px; padding: 10px; border-radius: 5px; border: none; color: white; font-weight: bold; outline: none; cursor: pointer;
+}
+
+/* --- إصلاح مشكلة الكتابة في الهاتف --- */
+.layer-input {
+    flex: 1; min-width: 80px; padding: 10px; border-radius: 5px; 
+    border: 2px solid #aaa; 
+    background: #ffffff; color: #000000; /* خلفية بيضاء ونص أسود */
+    text-align: center; font-weight: bold; font-size: 1rem;
+}
+
+/* --- لوحة الألوان الجديدة (بديلة Color Input) --- */
+.color-palette {
+    display: flex; gap: 5px; align-items: center;
+}
+.color-swatch {
+    width: 25px; height: 25px; border-radius: 50%; border: 2px solid #444; cursor: pointer; transition: transform 0.2s;
+}
+.color-swatch:hover { transform: scale(1.1); }
+.color-swatch.selected { border: 2px solid white; transform: scale(1.2); box-shadow: 0 0 5px white; }
+
+.glass-check {
+    display: flex; align-items: center; gap: 5px; color: #aaa; font-size: 0.9rem;
+    background: #333; padding: 8px 12px; border-radius: 5px; cursor: pointer;
+}
+.glass-check input { width: 18px; height: 18px; cursor: pointer; }
+
+/* ألوان القوائم */
+.opt-wall { background-color: #e91e63; }
+.opt-line { background-color: #2196f3; }
+.opt-hide { background-color: #555; }
+
 #mobile-crosshair {
     position: absolute; width: 60px; height: 60px;
     border: 2px solid rgba(255, 255, 0, 0.8); border-radius: 50%;

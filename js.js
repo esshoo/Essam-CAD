@@ -8,27 +8,21 @@ let camera, scene, renderer, controls;
 let roomGroup, snapPoints = [];
 let dolly;
 let settings = { height: 3.0, thickness: 0.20 };
+let parsedDxf = null;
 
-// Layer Data
-let parsedDxf = null; // لتخزين الملف المحلل مؤقتاً
-
-// Measurement Globals
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
 
-// State
 let isMeasuring = false;
 let measureStartPoint = new THREE.Vector3();
 let savedMeasurements = [];
 let activeLine, activeLabel;
 let snapSphere;
 
-// Mobile Logic
 let touchTimer = null;
 let isTouchDragging = false;
 let mobileCrosshair = document.getElementById('mobile-crosshair');
 
-// VR Globals
 let controller1, controller2;
 let teleportMarker;
 let activeController = null;
@@ -47,7 +41,6 @@ window.switchTab = (tabName) => {
 window.handleFileUpload = () => {
     const fileInput = document.getElementById('fileInput');
     if (fileInput.files.length === 0) { alert("يرجى اختيار ملف DXF"); return; }
-    
     settings.height = parseFloat(document.getElementById('wallHeight').value);
     settings.thickness = parseFloat(document.getElementById('wallThick').value) / 100;
     document.getElementById('loader').style.display = 'block';
@@ -58,7 +51,7 @@ window.handleFileUpload = () => {
             const parser = new window.DxfParser();
             parsedDxf = parser.parseSync(e.target.result);
             document.getElementById('loader').style.display = 'none';
-            showLayerModal(parsedDxf); // عرض نافذة الطبقات بدلاً من البناء المباشر
+            showLayerModal(parsedDxf);
         } catch(err) {
             alert("خطأ في قراءة الملف: " + err);
             document.getElementById('loader').style.display = 'none';
@@ -79,33 +72,77 @@ window.loadDemo = () => {
         }).catch(err => alert(err));
 };
 
-// --- Layer Logic ---
+// --- Layer Logic with Custom Color Palette ---
 function showLayerModal(dxf) {
     const layerSet = new Set();
     dxf.entities.forEach(e => { if(e.layer) layerSet.add(e.layer); });
     
     const container = document.getElementById('layerListContainer');
-    container.innerHTML = ''; // تنظيف
+    container.innerHTML = ''; 
+
+    // ألوان جاهزة للعرض (لتجنب مشاكل Color Picker في النظارة)
+    const palette = ['#e91e63', '#9c27b0', '#2196f3', '#00bcd4', '#4caf50', '#ffeb3b', '#ff9800', '#ffffff', '#000000'];
 
     layerSet.forEach(layerName => {
         const item = document.createElement('div');
         item.className = 'layer-item';
         
-        // تخمين النوع بناءً على الاسم (اختياري للذكاء)
-        let defaultType = 'hide';
         const lower = layerName.toLowerCase();
-        if(lower.includes('wall') || lower.includes('bina') || lower.includes('mabani')) defaultType = 'wall';
-        else if(lower.includes('furn') || lower.includes('socket') || lower.includes('dim')) defaultType = 'floor';
-        else if(lower.includes('light') || lower.includes('ceil') || lower.includes('cctv')) defaultType = 'ceil';
+        let defType = 'hide';
+        let defVal = 0; 
+        let defColor = '#ffffff';
+        let isGlass = false;
+
+        if(lower.includes('wall') || lower.includes('bina')) {
+            defType = 'wall'; defColor = '#e91e63';
+            if(lower.includes('glass')) { isGlass = true; defColor = '#00bcd4'; }
+        }
+        else if(lower.includes('beam') || lower.includes('kamara')) { 
+            defType = 'ceil'; defVal = 0.5; defColor = '#ffffff'; 
+        }
+        else if(lower.includes('light') || lower.includes('ceil')) { 
+            defType = 'ceil'; defVal = 0; defColor = '#ffeb3b'; 
+        }
+        else if(lower.includes('socket')) { 
+            defType = 'floor'; defVal = 0.4; defColor = '#4caf50'; 
+        }
+        else if(lower.includes('switch')) { 
+            defType = 'floor'; defVal = 1.2; defColor = '#9c27b0'; 
+        }
+        else if(lower.includes('furn') || lower.includes('floor')) { 
+            defType = 'floor'; defVal = 0; defColor = '#ffffff'; 
+        }
+
+        // إنشاء باليت الألوان HTML
+        let paletteHTML = `<div class="color-palette" id="palette-${layerName}">`;
+        palette.forEach(c => {
+            const isSelected = (c.toLowerCase() === defColor.toLowerCase()) ? 'selected' : '';
+            paletteHTML += `<div class="color-swatch ${isSelected}" style="background:${c}" onclick="selectColor('${layerName}', '${c}', this)"></div>`;
+        });
+        paletteHTML += `</div>`;
+        // Input مخفي لتخزين اللون المختار
+        paletteHTML += `<input type="hidden" id="color-input-${layerName}" value="${defColor}">`;
 
         item.innerHTML = `
-            <span class="layer-name">${layerName}</span>
-            <select class="layer-select ${getSelectClass(defaultType)}" data-layer="${layerName}" onchange="this.className = 'layer-select ' + this.options[this.selectedIndex].className">
-                <option value="wall" class="opt-wall" ${defaultType==='wall'?'selected':''}>🧱 حوائط (3D)</option>
-                <option value="floor" class="opt-floor" ${defaultType==='floor'?'selected':''}>🛋️ أرضية (2D)</option>
-                <option value="ceil" class="opt-ceil" ${defaultType==='ceil'?'selected':''}>💡 سقف (2D)</option>
-                <option value="hide" class="opt-hide" ${defaultType==='hide'?'selected':''}>👁️‍🗨️ إخفاء</option>
-            </select>
+            <div class="layer-name">${layerName}</div>
+            <div class="layer-controls">
+                <select class="layer-select ${getSelectClass(defType)}" 
+                        data-layer="${layerName}" id="type-${layerName}"
+                        onchange="updateLayerRow(this)">
+                    <option value="wall" ${defType==='wall'?'selected':''}>🧱 حوائط</option>
+                    <option value="ceil" ${defType==='ceil'?'selected':''}>🏗️ سقف / كمرات</option>
+                    <option value="floor" ${defType==='floor'?'selected':''}>🛋️ أرضية / عام</option>
+                    <option value="hide" ${defType==='hide'?'selected':''}>👁️‍🗨️ إخفاء</option>
+                </select>
+                
+                <input type="number" step="0.1" class="layer-input" id="val-${layerName}" value="${defVal}" placeholder="م" title="الارتفاع/السقوط">
+                
+                ${paletteHTML}
+                
+                <label class="glass-check" title="شفافية (زجاج)">
+                    <input type="checkbox" id="glass-${layerName}" ${isGlass?'checked':''}> 🧊
+                </label>
+            </div>
         `;
         container.appendChild(item);
     });
@@ -113,17 +150,38 @@ function showLayerModal(dxf) {
     document.getElementById('layer-modal').style.display = 'flex';
 }
 
+window.selectColor = (layerName, color, el) => {
+    // تحديث القيمة المخفية
+    document.getElementById(`color-input-${layerName}`).value = color;
+    // تحديث الشكل (Selected border)
+    const container = document.getElementById(`palette-${layerName}`);
+    Array.from(container.children).forEach(child => child.classList.remove('selected'));
+    el.classList.add('selected');
+};
+
 function getSelectClass(type) {
     if(type === 'wall') return 'opt-wall';
-    if(type === 'floor') return 'opt-floor';
-    if(type === 'ceil') return 'opt-ceil';
+    if(type === 'ceil') return 'opt-line'; 
+    if(type === 'floor') return 'opt-line';
     return 'opt-hide';
 }
 
+window.updateLayerRow = (select) => {
+    select.className = 'layer-select ' + getSelectClass(select.value);
+};
+
 window.processLayersAndBuild = () => {
     const layerConfig = {};
-    document.querySelectorAll('.layer-select').forEach(select => {
-        layerConfig[select.getAttribute('data-layer')] = select.value;
+    const selects = document.querySelectorAll('.layer-select');
+    
+    selects.forEach(sel => {
+        const name = sel.getAttribute('data-layer');
+        layerConfig[name] = {
+            type: sel.value,
+            value: parseFloat(document.getElementById(`val-${name}`).value) || 0, 
+            color: document.getElementById(`color-input-${name}`).value, // قراءة اللون من Input المخفي
+            isGlass: document.getElementById(`glass-${name}`).checked
+        };
     });
 
     document.getElementById('layer-modal').style.display = 'none';
@@ -152,22 +210,34 @@ function init3DScene(dxf, layerConfig) {
     document.body.appendChild(renderer.domElement);
     document.body.appendChild(VRButton.createButton(renderer));
 
-    // Lighting
     scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2));
     const dirLight = new THREE.DirectionalLight(0xffffff, 1);
     dirLight.position.set(10, 20, 10);
     scene.add(dirLight);
     
+    // --- Floor ---
     const grid = new THREE.GridHelper(100, 100, 0x444444, 0x222222);
     scene.add(grid);
-    
-    // الأرضية الأساسية للتنقل (Mesh)
     const floorGeo = new THREE.PlaneGeometry(200, 200);
     const floorMat = new THREE.MeshBasicMaterial({ visible: false });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.name = "floor";
     scene.add(floor);
+
+    // --- Ceiling Helper (السقف الشبكي) ---
+    // إنشاء شبكة سقف مماثلة للأرضية لكن عند الارتفاع المحدد
+    const ceilGrid = new THREE.GridHelper(100, 100, 0x444444, 0x222222);
+    ceilGrid.position.y = settings.height;
+    scene.add(ceilGrid);
+
+    // إنشاء "غطاء" أسود شفاف للسقف ليعطي إحساس الغرفة المغلقة
+    const ceilPlaneGeo = new THREE.PlaneGeometry(200, 200);
+    const ceilPlaneMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+    const ceilPlane = new THREE.Mesh(ceilPlaneGeo, ceilPlaneMat);
+    ceilPlane.rotation.x = -Math.PI / 2;
+    ceilPlane.position.y = settings.height + 0.01; // نرفعه شعرة عن الشبكة لمنع التداخل
+    scene.add(ceilPlane);
 
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -184,7 +254,7 @@ function init3DScene(dxf, layerConfig) {
     snapSphere.renderOrder = 999;
     scene.add(snapSphere);
 
-    // Tools Setup
+    // Tools
     const lineMat = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2, depthTest: false });
     const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
     activeLine = new THREE.Line(lineGeo, lineMat);
@@ -199,11 +269,9 @@ function init3DScene(dxf, layerConfig) {
 
     setupVRControllers();
 
-    // --- Build The Scene Based on Layers ---
     buildSceneFromLayers(dxf, layerConfig);
     loadFromLocalStorage();
 
-    // Events
     window.addEventListener('resize', onResize);
     renderer.domElement.addEventListener('pointermove', onPointerMove);
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
@@ -219,7 +287,6 @@ function buildSceneFromLayers(dxf, layerConfig) {
     roomGroup = new THREE.Group();
     snapPoints = [];
     
-    // حساب المركز
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     dxf.entities.forEach(e => {
         if((e.type === 'LINE' || e.type === 'LWPOLYLINE') && e.vertices) {
@@ -229,27 +296,40 @@ function buildSceneFromLayers(dxf, layerConfig) {
              });
         }
     });
-    // حماية لو الملف فارغ
     if(minX === Infinity) { minX=0; maxX=0; minY=0; maxY=0; }
     
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
 
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, side: THREE.DoubleSide });
-    const floorLineMat = new THREE.LineBasicMaterial({ color: 0xaaaaaa }); // لون الفرش (رمادي فاتح)
-    const ceilLineMat = new THREE.LineBasicMaterial({ color: 0x00ffff }); // لون السقف (سماوي)
+    const materialsCache = {};
 
     dxf.entities.forEach(e => {
-        const type = layerConfig[e.layer];
-        if(!type || type === 'hide') return;
+        const config = layerConfig[e.layer];
+        if(!config || config.type === 'hide') return;
+
+        const matKey = e.layer + config.color; // المفتاح يشمل اللون لضمان التنوع
+        if(!materialsCache[matKey]) {
+            if(config.type === 'wall' || (config.type === 'ceil' && config.value > 0)) {
+                materialsCache[matKey] = new THREE.MeshStandardMaterial({ 
+                    color: config.color, 
+                    side: THREE.DoubleSide,
+                    transparent: config.isGlass,
+                    opacity: config.isGlass ? 0.3 : 1.0,
+                    roughness: config.isGlass ? 0.1 : 0.8
+                });
+            } else {
+                materialsCache[matKey] = new THREE.LineBasicMaterial({ color: config.color });
+            }
+        }
+        const material = materialsCache[matKey];
 
         if (e.type === 'LINE') {
-            processEntity(e.vertices[0], e.vertices[1], cx, cy, type, wallMat, floorLineMat, ceilLineMat);
+            processEntity(e.vertices[0], e.vertices[1], cx, cy, config, material);
         } else if (e.type === 'LWPOLYLINE') {
             for(let i=0; i<e.vertices.length-1; i++) {
-                processEntity(e.vertices[i], e.vertices[i+1], cx, cy, type, wallMat, floorLineMat, ceilLineMat);
+                processEntity(e.vertices[i], e.vertices[i+1], cx, cy, config, material);
             }
-            if(e.shape) processEntity(e.vertices[e.vertices.length-1], e.vertices[0], cx, cy, type, wallMat, floorLineMat, ceilLineMat);
+            if(e.shape) processEntity(e.vertices[e.vertices.length-1], e.vertices[0], cx, cy, config, material);
         }
     });
 
@@ -258,54 +338,65 @@ function buildSceneFromLayers(dxf, layerConfig) {
     controls.update();
 }
 
-function processEntity(p1, p2, cx, cy, type, wallMat, floorLineMat, ceilLineMat) {
-    // تحويل الإحداثيات (Autocad Y is 3D Z inverted)
+function processEntity(p1, p2, cx, cy, config, material) {
     const x1 = p1.x - cx; const z1 = -(p1.y - cy);
     const x2 = p2.x - cx; const z2 = -(p2.y - cy);
 
-    if (type === 'wall') {
-        // بناء حائط 3D
+    // 1. حوائط
+    if (config.type === 'wall') {
         const v1 = new THREE.Vector3(x1, settings.height/2, z1);
         const v2 = new THREE.Vector3(x2, settings.height/2, z2);
         const dist = Math.sqrt(Math.pow(x1-x2,2) + Math.pow(z1-z2,2));
         
         if(dist > 0.05) {
             const geo = new THREE.BoxGeometry(settings.thickness, settings.height, dist);
-            const wall = new THREE.Mesh(geo, wallMat);
+            const wall = new THREE.Mesh(geo, material);
             wall.position.copy(v1.clone().add(v2).multiplyScalar(0.5));
             wall.lookAt(v2);
             roomGroup.add(wall);
-
-            // نقاط السناب (أرضية وسقف الحائط)
             snapPoints.push(new THREE.Vector3(x1, 0, z1), new THREE.Vector3(x1, settings.height, z1));
             snapPoints.push(new THREE.Vector3(x2, 0, z2), new THREE.Vector3(x2, settings.height, z2));
         }
+    } 
+    // 2. سقف (كمرات أو خطوط)
+    else if (config.type === 'ceil') {
+        if (config.value > 0) { // كمرة ساقطة
+            const beamHeight = config.value;
+            const centerY = settings.height - (beamHeight / 2);
+            const v1 = new THREE.Vector3(x1, centerY, z1);
+            const v2 = new THREE.Vector3(x2, centerY, z2);
+            const dist = Math.sqrt(Math.pow(x1-x2,2) + Math.pow(z1-z2,2));
 
-    } else if (type === 'floor') {
-        // رسم خط على الأرض (مرتفع قليلاً لمنع التداخل)
-        const y = 0.05; 
+            if(dist > 0.05) {
+                const geo = new THREE.BoxGeometry(settings.thickness, beamHeight, dist);
+                const beam = new THREE.Mesh(geo, material);
+                beam.position.copy(v1.clone().add(v2).multiplyScalar(0.5));
+                beam.lookAt(v2);
+                roomGroup.add(beam);
+                snapPoints.push(new THREE.Vector3(x1, settings.height - beamHeight, z1));
+                snapPoints.push(new THREE.Vector3(x2, settings.height - beamHeight, z2));
+            }
+        } else { // خط في السقف
+            const y = settings.height;
+            const points = [new THREE.Vector3(x1, y, z1), new THREE.Vector3(x2, y, z2)];
+            const geo = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geo, material);
+            roomGroup.add(line);
+            snapPoints.push(points[0], points[1]);
+        }
+    }
+    // 3. أرضية
+    else if (config.type === 'floor') {
+        const y = config.value > 0 ? config.value : 0.05;
         const points = [new THREE.Vector3(x1, y, z1), new THREE.Vector3(x2, y, z2)];
         const geo = new THREE.BufferGeometry().setFromPoints(points);
-        const line = new THREE.Line(geo, floorLineMat);
+        const line = new THREE.Line(geo, material);
         roomGroup.add(line);
-        // سناب
-        snapPoints.push(points[0], points[1]);
-
-    } else if (type === 'ceil') {
-        // رسم خط في السقف
-        const y = settings.height;
-        const points = [new THREE.Vector3(x1, y, z1), new THREE.Vector3(x2, y, z2)];
-        const geo = new THREE.BufferGeometry().setFromPoints(points);
-        const line = new THREE.Line(geo, ceilLineMat);
-        roomGroup.add(line);
-        // سناب
         snapPoints.push(points[0], points[1]);
     }
 }
 
-// --- بقية الدوال (بدون تغيير كبير) ---
-// ... (Measurement, Undo, Export/Import, Helper functions) ...
-// نسخ الدوال المساعدة السابقة كما هي:
+// --- Helper Functions (No Changes) ---
 function createTextSprite(message, color = "#00ff00") {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -401,7 +492,6 @@ function updateRaycaster(x, y) {
 
 function handleHoverAndSnap() {
     if(!roomGroup) return;
-    // نفحص كل الأبناء (حوائط وخطوط)
     const intersects = raycaster.intersectObjects(roomGroup.children);
     let target = null;
     if (intersects.length > 0) target = intersects[0].point;
@@ -561,7 +651,6 @@ function handleVRUpdate() {
     raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
     if(isTeleporting) {
-        // فحص الأرضية فقط للتنقل (عشان مطلعش فوق الكراسي)
         const floorInt = raycaster.intersectObject(scene.getObjectByName('floor'));
         if(floorInt.length > 0) teleportMarker.position.copy(floorInt[0].point);
         else teleportMarker.visible = false;
